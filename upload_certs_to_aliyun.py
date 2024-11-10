@@ -19,7 +19,7 @@ def upload_certificate(client, domain_name, cert_path, key_path):
 
     if not file_exists_and_not_empty(expanded_cert_path) or not file_exists_and_not_empty(expanded_key_path):
         raise FileNotFoundError(f"Certificate or key file for domain {domain_name} is missing or empty")
-    
+
     with open(expanded_cert_path, 'r') as f:
         cert = f.read()
 
@@ -48,10 +48,13 @@ def main():
 
     client = AcsClient(access_key_id, access_key_secret, 'cn-hangzhou')
 
-    for domain, cdn_domain in zip(domains, cdn_domains):
+    for domain in domains:
         cert_path = f'~/certs/{domain}/fullchain.pem'
         key_path = f'~/certs/{domain}/privkey.pem'
-        upload_certificate(client, cdn_domain, cert_path, key_path)
+        related_cdn_domains = [cdn for cdn in cdn_domains if cdn.endswith(domain)]
+
+        for cdn_domain in related_cdn_domains:
+            upload_certificate(client, cdn_domain, cert_path, key_path)
 
 if __name__ == "__main__":
     main()
