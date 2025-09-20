@@ -65,13 +65,17 @@ jobs:
         IFS=',' read -r -a domain_array <<< "${DOMAINS}"
         for domain in "${domain_array[@]}"; do
           domain=$(echo "$domain" | xargs)  # 去除空格
-          cert_file="~/certs/${domain}/fullchain.pem"
-          key_file="~/certs/${domain}/privkey.pem"
+          cert_file="/home/runner/certs/${domain}/fullchain.pem"
+          key_file="/home/runner/certs/${domain}/privkey.pem"
+
+          echo "检查证书文件: $cert_file"
+          echo "检查私钥文件: $key_file"
 
           if [ ! -f "$cert_file" ] || [ ! -f "$key_file" ]; then
             echo "❌ 证书文件不存在: $domain"
             echo "证书文件: $cert_file"
             echo "私钥文件: $key_file"
+            ls -la /home/runner/certs/${domain}/ || echo "目录不存在"
             exit 1
           fi
 

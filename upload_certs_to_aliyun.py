@@ -10,12 +10,24 @@ def get_env_var(key):
     return value
 
 def file_exists_and_not_empty(file_path):
-    expanded_path = os.path.expanduser(file_path)
+    # 如果是绝对路径，直接使用；否则展开用户目录
+    if os.path.isabs(file_path):
+        expanded_path = file_path
+    else:
+        expanded_path = os.path.expanduser(file_path)
     return os.path.isfile(expanded_path) and os.path.getsize(expanded_path) > 0
 
 def upload_certificate(client, domain_name, cert_path, key_path):
-    expanded_cert_path = os.path.expanduser(cert_path)
-    expanded_key_path = os.path.expanduser(key_path)
+    # 如果是绝对路径，直接使用；否则展开用户目录
+    if os.path.isabs(cert_path):
+        expanded_cert_path = cert_path
+    else:
+        expanded_cert_path = os.path.expanduser(cert_path)
+
+    if os.path.isabs(key_path):
+        expanded_key_path = key_path
+    else:
+        expanded_key_path = os.path.expanduser(key_path)
 
     if not file_exists_and_not_empty(expanded_cert_path) or not file_exists_and_not_empty(expanded_key_path):
         raise FileNotFoundError(f"Certificate or key file for domain {domain_name} is missing or empty")
@@ -54,8 +66,9 @@ def main():
 
         for domain in domains:
             domain = domain.strip()  # 去除可能的空格
-            cert_path = f'~/certs/{domain}/fullchain.pem'
-            key_path = f'~/certs/{domain}/privkey.pem'
+            # 使用绝对路径，避免 ~ 展开问题
+            cert_path = f'/home/runner/certs/{domain}/fullchain.pem'
+            key_path = f'/home/runner/certs/{domain}/privkey.pem'
             related_cdn_domains = [cdn.strip() for cdn in cdn_domains if cdn.strip().endswith(domain)]
 
             print(f"处理域名: {domain}")
