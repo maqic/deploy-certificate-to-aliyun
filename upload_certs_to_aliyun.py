@@ -41,20 +41,40 @@ def upload_certificate(client, domain_name, cert_path, key_path):
     print(str(response, encoding='utf-8'))
 
 def main():
-    access_key_id = get_env_var('ALIYUN_ACCESS_KEY_ID')
-    access_key_secret = get_env_var('ALIYUN_ACCESS_KEY_SECRET')
-    domains = get_env_var('DOMAINS').split(',')
-    cdn_domains = get_env_var('ALIYUN_CDN_DOMAINS').split(',')
+    try:
+        access_key_id = get_env_var('ALIYUN_ACCESS_KEY_ID')
+        access_key_secret = get_env_var('ALIYUN_ACCESS_KEY_SECRET')
+        domains = get_env_var('DOMAINS').split(',')
+        cdn_domains = get_env_var('ALIYUN_CDN_DOMAINS').split(',')
 
-    client = AcsClient(access_key_id, access_key_secret, 'cn-hangzhou')
+        print(f"开始处理域名: {domains}")
+        print(f"CDN域名: {cdn_domains}")
 
-    for domain in domains:
-        cert_path = f'~/certs/{domain}/fullchain.pem'
-        key_path = f'~/certs/{domain}/privkey.pem'
-        related_cdn_domains = [cdn for cdn in cdn_domains if cdn.endswith(domain)]
+        client = AcsClient(access_key_id, access_key_secret, 'cn-hangzhou')
 
-        for cdn_domain in related_cdn_domains:
-            upload_certificate(client, cdn_domain, cert_path, key_path)
+        for domain in domains:
+            domain = domain.strip()  # 去除可能的空格
+            cert_path = f'~/certs/{domain}/fullchain.pem'
+            key_path = f'~/certs/{domain}/privkey.pem'
+            related_cdn_domains = [cdn.strip() for cdn in cdn_domains if cdn.strip().endswith(domain)]
+
+            print(f"处理域名: {domain}")
+            print(f"相关CDN域名: {related_cdn_domains}")
+
+            for cdn_domain in related_cdn_domains:
+                try:
+                    print(f"正在为 {cdn_domain} 上传证书...")
+                    upload_certificate(client, cdn_domain, cert_path, key_path)
+                    print(f"✅ {cdn_domain} 证书上传成功")
+                except Exception as e:
+                    print(f"❌ {cdn_domain} 证书上传失败: {str(e)}")
+                    raise
+
+        print("🎉 所有证书上传完成!")
+
+    except Exception as e:
+        print(f"❌ 程序执行失败: {str(e)}")
+        exit(1)
 
 if __name__ == "__main__":
     main()

@@ -27,6 +27,8 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y socat
         curl https://get.acme.sh | sh -s email="${EMAIL}"
+        # 设置默认CA为Let's Encrypt，避免ZeroSSL的EAB问题
+        ~/.acme.sh/acme.sh --set-default-ca --server letsencrypt
 
     - name: Prepare acme.sh credentials
       run: |
@@ -44,10 +46,43 @@ jobs:
       run: |
         IFS=',' read -r -a domain_array <<< "${DOMAINS}"
         for domain in "${domain_array[@]}"; do
+          echo "正在为域名 *.${domain} 申请证书..."
           ~/.acme.sh/acme.sh --issue --dns dns_ali -d "*.${domain}" \
-          --key-file ~/certs/${domain}/privkey.pem --fullchain-file ~/certs/${domain}/fullchain.pem
+          --key-file ~/certs/${domain}/privkey.pem --fullchain-file ~/certs/${domain}/fullchain.pem \
+          --server letsencrypt --force --debug
+          if [ $? -eq 0 ]; then
+            echo "✅ 域名 *.${domain} 证书申请成功"
+          else
+            echo "❌ 域名 *.${domain} 证书申请失败"
+            exit 1
+          fi
         done
 
+    - name: Verify certificates were generated
+      env:
+        DOMAINS: ${{ secrets.DOMAINS }}
+      run: |
+        IFS=',' read -r -a domain_array <<< "${DOMAINS}"
+        for domain in "${domain_array[@]}"; do
+          domain=$(echo "$domain" | xargs)  # 去除空格
+          cert_file="~/certs/${domain}/fullchain.pem"
+          key_file="~/certs/${domain}/privkey.pem"
+
+          if [ ! -f "$cert_file" ] || [ ! -f "$key_file" ]; then
+            echo "❌ 证书文件不存在: $domain"
+            echo "证书文件: $cert_file"
+            echo "私钥文件: $key_file"
+            exit 1
+          fi
+
+          # 检查证书文件是否为空
+          if [ ! -s "$cert_file" ] || [ ! -s "$key_file" ]; then
+            echo "❌ 证书文件为空: $domain"
+            exit 1
+          fi
+
+          echo "✅ 域名 $domain 证书文件验证通过"
+        done
 
     - name: Install Python dependencies
       run: pip install -r requirements.txt
@@ -60,7 +95,7 @@ jobs:
         DOMAINS: ${{ secrets.DOMAINS }}
         # 设置阿里云cdn域名，一般是三级域名，例如cdn.example.com，需要跟上面的DOMAINS对应，否则会设置错误
         ALIYUN_CDN_DOMAINS: ${{ secrets.ALIYUN_CDN_DOMAINS }}
-  
+
       run: python upload_certs_to_aliyun.py
 
     - name: Clean up
