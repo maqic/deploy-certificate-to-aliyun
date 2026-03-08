@@ -42,7 +42,8 @@ def upload_certificate(client, domain_name, cert_path, key_path):
     # CDN加速域名
     request.set_DomainName(domain_name)
     # 证书名称
-    request.set_CertName(domain_name + datetime.datetime.now().strftime("%Y%m%d_%H"))
+    # 精确到秒，避免同一小时内重复运行导致 CertNameAlreadyExists
+    request.set_CertName(domain_name + "_" + datetime.datetime.now().strftime("%Y%m%d_%H%M%S"))
     request.set_CertType('upload')
     request.set_SSLProtocol('on')
     request.set_SSLPub(cert)
