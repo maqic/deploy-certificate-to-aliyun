@@ -14,7 +14,11 @@ fork该项目，并填写对应参数，再push一次代码即可（随便改点
 - `ALIYUN_CDN_DOMAINS`：设置阿里云cdn域名，一般是三级域名，例如cdn.example.com，需要跟上面的DOMAINS对应，否则会设置错误
 - `EMAIL`:  证书过期时提醒的邮件
 
+**（可选）工作流结果邮件通知**：成功/失败时发邮件到指定邮箱，需在 Secrets 中增加：
+- `MAIL_USERNAME`：发件邮箱（如用 Gmail 则填 `xxx@gmail.com`）
+- `MAIL_PASSWORD`：该邮箱的 SMTP 密码（Gmail 需在账号里开启「两步验证」后生成 [应用专用密码](https://myaccount.google.com/apppasswords)）
 
+未配置上述两项时，工作流照常运行，仅不会发邮件。
 
 
 ## 相关文档
