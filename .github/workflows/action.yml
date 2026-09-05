@@ -6,132 +6,115 @@ on:
       - main
   schedule:
     - cron: '0 0 20 */2 *' # 每两个月的第二十天执行一次
-  workflow_dispatch:  # 支持在 Actions 页手动运行，便于验证邮件通知等
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   renew-deploy-cert:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v2
+      - name: Checkout repository
+        uses: actions/checkout@v6
 
-    - name: Set up Python
-      uses: actions/setup-python@v2
-      with:
-        python-version: '3.8'
-
-    - name: Install acme.sh
-      env:
-        EMAIL: ${{ secrets.EMAIL}}
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y socat
-        curl https://get.acme.sh | sh -s email="${EMAIL}"
-        # 设置默认CA为Let's Encrypt，避免ZeroSSL的EAB问题
-        ~/.acme.sh/acme.sh --set-default-ca --server letsencrypt
-
-    - name: Prepare acme.sh credentials
-      run: |
-        mkdir -p ~/.acme.sh
-        IFS=',' read -r -a domain_array <<< "${{ secrets.DOMAINS }}"
-        for domain in "${domain_array[@]}"; do
-          mkdir -p ~/certs/${domain}
-        done
-
-    - name: Obtain SSL Certificates
-      env:
-        DOMAINS: ${{ secrets.DOMAINS }}
-        Ali_Key: ${{ secrets.ALIYUN_ACCESS_KEY_ID }}
-        Ali_Secret: ${{ secrets.ALIYUN_ACCESS_KEY_SECRET }}
-      run: |
-        IFS=',' read -r -a domain_array <<< "${DOMAINS}"
-        for domain in "${domain_array[@]}"; do
-          echo "正在为域名 *.${domain} 申请证书..."
-          ~/.acme.sh/acme.sh --issue --dns dns_ali -d "*.${domain}" \
-          --key-file ~/certs/${domain}/privkey.pem --fullchain-file ~/certs/${domain}/fullchain.pem \
-          --server letsencrypt --force --debug
-          if [ $? -eq 0 ]; then
-            echo "✅ 域名 *.${domain} 证书申请成功"
-          else
-            echo "❌ 域名 *.${domain} 证书申请失败"
-            exit 1
-          fi
-        done
-
-    - name: Verify certificates were generated
-      env:
-        DOMAINS: ${{ secrets.DOMAINS }}
-      run: |
-        IFS=',' read -r -a domain_array <<< "${DOMAINS}"
-        for domain in "${domain_array[@]}"; do
-          domain=$(echo "$domain" | xargs)  # 去除空格
-          cert_file="/home/runner/certs/${domain}/fullchain.pem"
-          key_file="/home/runner/certs/${domain}/privkey.pem"
-
-          echo "检查证书文件: $cert_file"
-          echo "检查私钥文件: $key_file"
-
-          if [ ! -f "$cert_file" ] || [ ! -f "$key_file" ]; then
-            echo "❌ 证书文件不存在: $domain"
-            echo "证书文件: $cert_file"
-            echo "私钥文件: $key_file"
-            ls -la /home/runner/certs/${domain}/ || echo "目录不存在"
-            exit 1
-          fi
-
-          # 检查证书文件是否为空
-          if [ ! -s "$cert_file" ] || [ ! -s "$key_file" ]; then
-            echo "❌ 证书文件为空: $domain"
-            exit 1
-          fi
-
-          echo "✅ 域名 $domain 证书文件验证通过"
-        done
-
-    - name: Install Python dependencies
-      run: pip install -r requirements.txt
-
-    - name: Upload certificates to Alibaba Cloud CDN
-      env:
-        ALIYUN_ACCESS_KEY_ID: ${{ secrets.ALIYUN_ACCESS_KEY_ID }}
-        ALIYUN_ACCESS_KEY_SECRET: ${{ secrets.ALIYUN_ACCESS_KEY_SECRET }}
-        # 要设置域名的二级域名，例如要设置*.example.com，这里填写的就是example.com, 多个域名用英文逗号隔开
-        DOMAINS: ${{ secrets.DOMAINS }}
-        # 设置阿里云cdn域名，一般是三级域名，例如cdn.example.com，需要跟上面的DOMAINS对应，否则会设置错误
-        ALIYUN_CDN_DOMAINS: ${{ secrets.ALIYUN_CDN_DOMAINS }}
-
-      run: python upload_certs_to_aliyun.py
-
-    - name: Clean up
-      env:
-        DOMAINS: ${{ secrets.DOMAINS }}
-      run: |
-        IFS=',' read -r -a domain_array <<< "${DOMAINS}"
-        for domain in "${domain_array[@]}"; do
-          rm -rf ~/certs/${domain}
-        done
-
-  notify:
-    runs-on: ubuntu-latest
-    needs: [renew-deploy-cert]
-    if: always() && (needs.renew-deploy-cert.result == 'success' || needs.renew-deploy-cert.result == 'failure')
-    steps:
-      - name: Send result email
-        continue-on-error: true
-        uses: dawidd6/action-send-mail@v3
+      - name: Set up Python
+        uses: actions/setup-python@v6
         with:
-          server_address: smtp.gmail.com
-          server_port: 587
-          username: ${{ secrets.MAIL_USERNAME }}
-          password: ${{ secrets.MAIL_PASSWORD }}
-          secure: false
-          subject: "[SSL 证书] ${{ needs.renew-deploy-cert.result == 'success' && '✅ 续期成功' || '❌ 续期失败' }} - ${{ github.repository }}"
-          to: maqic51@gmail.com
-          from: ${{ secrets.MAIL_USERNAME }}
-          body: |
-            工作流: ${{ github.workflow }}
-            运行: ${{ github.run_id }}
-            结果: ${{ needs.renew-deploy-cert.result == 'success' && '成功' || '失败' }}
-            时间: ${{ github.event.repository.updated_at || 'N/A' }}
-            详情: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install acme.sh
+        env:
+          EMAIL: ${{ secrets.EMAIL }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y socat
+          curl -fsSL https://get.acme.sh | sh -s email="${EMAIL}"
+          ~/.acme.sh/acme.sh --set-default-ca --server letsencrypt
+
+      - name: Prepare certificate directories
+        env:
+          DOMAINS: ${{ secrets.DOMAINS }}
+        run: |
+          set -euo pipefail
+          IFS=',' read -r -a domain_array <<< "${DOMAINS}"
+          test "${#domain_array[@]}" -gt 0
+          for domain in "${domain_array[@]}"; do
+            domain="$(echo "${domain}" | xargs)"
+            test -n "${domain}"
+            mkdir -p "/home/runner/certs/${domain}"
+          done
+
+      - name: Obtain SSL certificates
+        id: issue
+        env:
+          DOMAINS: ${{ secrets.DOMAINS }}
+          Ali_Key: ${{ secrets.ALIYUN_ACCESS_KEY_ID }}
+          Ali_Secret: ${{ secrets.ALIYUN_ACCESS_KEY_SECRET }}
+        run: |
+          set -euo pipefail
+          IFS=',' read -r -a domain_array <<< "${DOMAINS}"
+          index=0
+          for domain in "${domain_array[@]}"; do
+            domain="$(echo "${domain}" | xargs)"
+            index=$((index + 1))
+            echo "正在申请第 ${index} 个域名证书"
+            ~/.acme.sh/acme.sh --issue --dns dns_ali -d "*.${domain}" \
+              --key-file "/home/runner/certs/${domain}/privkey.pem" \
+              --fullchain-file "/home/runner/certs/${domain}/fullchain.pem" \
+              --server letsencrypt --force
+          done
+
+      - name: Verify certificate files
+        id: verify_files
+        env:
+          DOMAINS: ${{ secrets.DOMAINS }}
+        run: |
+          set -euo pipefail
+          IFS=',' read -r -a domain_array <<< "${DOMAINS}"
+          for domain in "${domain_array[@]}"; do
+            domain="$(echo "${domain}" | xargs)"
+            cert_file="/home/runner/certs/${domain}/fullchain.pem"
+            key_file="/home/runner/certs/${domain}/privkey.pem"
+            test -s "${cert_file}"
+            test -s "${key_file}"
+            openssl x509 -in "${cert_file}" -checkend 2592000 -noout
+            cert_key_hash="$(openssl x509 -in "${cert_file}" -pubkey -noout | openssl pkey -pubin -outform DER | sha256sum | cut -d' ' -f1)"
+            private_key_hash="$(openssl pkey -in "${key_file}" -pubout -outform DER | sha256sum | cut -d' ' -f1)"
+            test "${cert_key_hash}" = "${private_key_hash}"
+          done
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Upload certificates to Alibaba Cloud CDN
+        id: upload
+        env:
+          ALIYUN_ACCESS_KEY_ID: ${{ secrets.ALIYUN_ACCESS_KEY_ID }}
+          ALIYUN_ACCESS_KEY_SECRET: ${{ secrets.ALIYUN_ACCESS_KEY_SECRET }}
+          DOMAINS: ${{ secrets.DOMAINS }}
+          ALIYUN_CDN_DOMAINS: ${{ secrets.ALIYUN_CDN_DOMAINS }}
+        run: python upload_certs_to_aliyun.py
+
+      - name: Send renewal result email
+        if: always()
+        env:
+          DOMAINS: ${{ secrets.DOMAINS }}
+          ALIYUN_CDN_DOMAINS: ${{ secrets.ALIYUN_CDN_DOMAINS }}
+          MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
+          MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
+          MAIL_TO: maqic51@gmail.com
+          CERT_ROOT: /home/runner/certs
+          ISSUE_OUTCOME: ${{ steps.issue.outcome }}
+          FILES_OUTCOME: ${{ steps.verify_files.outcome }}
+          UPLOAD_OUTCOME: ${{ steps.upload.outcome }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: python send_ssl_report.py
+
+      - name: Clean up certificate files
+        if: always()
+        run: rm -rf /home/runner/certs
