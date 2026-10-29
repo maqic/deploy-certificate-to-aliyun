@@ -97,14 +97,14 @@ jobs:
           ALIYUN_ACCESS_KEY_ID: ${{ secrets.ALIYUN_ACCESS_KEY_ID }}
           ALIYUN_ACCESS_KEY_SECRET: ${{ secrets.ALIYUN_ACCESS_KEY_SECRET }}
           DOMAINS: ${{ secrets.DOMAINS }}
-          ALIYUN_CDN_DOMAINS: ${{ secrets.ALIYUN_CDN_DOMAINS }}
+          ALIYUN_CDN_DOMAINS: "${{ secrets.ALIYUN_CDN_DOMAINS }},dodo.saibao.fun"
         run: python upload_certs_to_aliyun.py
 
       - name: Send renewal result email
         if: always()
         env:
           DOMAINS: ${{ secrets.DOMAINS }}
-          ALIYUN_CDN_DOMAINS: ${{ secrets.ALIYUN_CDN_DOMAINS }}
+          ALIYUN_CDN_DOMAINS: "${{ secrets.ALIYUN_CDN_DOMAINS }},dodo.saibao.fun"
           MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
           MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
           MAIL_TO: maqic51@gmail.com
