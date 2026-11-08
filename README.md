@@ -28,7 +28,7 @@ fork该项目，并填写对应参数，再push一次代码即可（随便改点
 > - 设置CDN证书：https://next.api.aliyun.com/document/Cdn/2018-05-10/SetCdnDomainSSLCertificate
 
 ---
-最后更新: 2026-11-01 08:37:19
+最后更新: 2026-11-08 08:29:21
 
 ## 官网 CDN 证书
 
